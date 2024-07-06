@@ -27,12 +27,27 @@ std::atomic_bool start = false;
 int key_idx = 0;
 int key_length = 4;
 char password[100];
+int refreshRate = 150;
 
 int port = 9000;
 
 bool show_log = false;
 bool parameter_multiplexing = false;
 bool save_password = true;
+
+void DisplayTooltip(const char* desc)
+{
+	ImGui::SameLine();
+	ImGui::TextDisabled("(?)");
+	if (ImGui::IsItemHovered())
+	{
+		ImGui::BeginTooltip();
+		ImGui::PushTextWrapPos(290.0f);
+		ImGui::TextUnformatted(desc);
+		ImGui::PopTextWrapPos();
+		ImGui::EndTooltip();
+	}
+}
 
 void DrawUI(OSC& osc)
 {
@@ -41,7 +56,7 @@ void DrawUI(OSC& osc)
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoSavedSettings;
 
-	ImGui::SetNextWindowSize(ImVec2(300, 200));
+	ImGui::SetNextWindowSize(ImVec2(300, 225));
 	ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
 	ImGui::Begin("Window", 0, flags);
 
@@ -76,6 +91,14 @@ void DrawUI(OSC& osc)
 	ImGui::Text("Parameter-multiplexing");
 	ImGui::SameLine();
 	ImGui::Checkbox("##parameter_multiplexing", &parameter_multiplexing);
+	if (parameter_multiplexing)
+	{
+		ImGui::Text("Refresh rate(ms)");
+		DisplayTooltip("The wait time before sending the next OSC data. If you can't decrypt when viewed by other users, try increasing this value.");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(50);
+		ImGui::InputInt("##Refresh rate", &refreshRate, 0, 0);
+	}
 
 	ImGui::Text("Save password");
 	ImGui::SameLine();
@@ -96,7 +119,7 @@ void DrawUI(OSC& osc)
 			start = false;
 	}
 
-	ImGui::SetCursorPosY(200 - 30);
+	ImGui::SetCursorPosY(225 - 30);
 	if(ImGui::Button("Logs"))
 	{
 		show_log = true;
@@ -231,7 +254,7 @@ int MAIN
 					else
 						osc_addr = "/avatar/parameters/pkey" + std::to_string(i);
 					osc.SendOSC(osc_addr, pwd);
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+					std::this_thread::sleep_for(std::chrono::milliseconds(refreshRate));
 					/////////////////////////////////////////////////
 					if (parameter_multiplexing)
 					{
@@ -261,7 +284,8 @@ int MAIN
 
 	stop = true;
 	start = false;
-	thr.join();
+	if(thr.joinable())
+		thr.join();
 
 	if (save_password)
 	{

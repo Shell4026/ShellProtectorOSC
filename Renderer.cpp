@@ -4,7 +4,7 @@
 #include "imgui-SFML.h"
 
 Renderer::Renderer() :
-	window(sf::VideoMode(300, 200), "ShellProtector", sf::Style::Close)
+	window(sf::VideoMode(300, 225), "ShellProtector", sf::Style::Close)
 {
 	window.setFramerateLimit(60);
 	ImGui::SFML::Init(window);
