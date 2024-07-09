@@ -17,6 +17,7 @@
 #if _WIN32
 #include <windows.h>
 #define MAIN APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
+//#define MAIN main()
 #elif
 #define MAIN main()
 #endif
@@ -166,8 +167,10 @@ void DrawLog(OSC &osc) {
 
 int MAIN
 {
+	std::cout << "Start...\n";
 	OSC osc;
 	osc.Init("127.0.0.1", port);
+	std::cout << "OSC Init\n";
 
 	Load loader;
 	if (!loader.LoadFile())
@@ -180,6 +183,7 @@ int MAIN
 		}
 		key_idx = loader.key_idx;
 	}
+	std::cout << "Load save file\n";
 
 	std::thread thr([&] {
 		const float factor = pow(10.0f, 4);
@@ -268,8 +272,10 @@ int MAIN
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 	});
-	
+	std::cout << "Thread Init\n";
+
 	Renderer* renderer = Renderer::GetInstance();
+	std::cout << "Renderer Init\n";
 	sf::Clock delta_clock;
 
 	while (renderer->GetWindow()->isOpen())
@@ -284,6 +290,8 @@ int MAIN
 
 	stop = true;
 	start = false;
+
+	std::cout << "End\n";
 	if(thr.joinable())
 		thr.join();
 

@@ -3,9 +3,12 @@
 #include "imgui.h"
 #include "imgui-SFML.h"
 
-Renderer::Renderer() :
-	window(sf::VideoMode(300, 225), "ShellProtector", sf::Style::Close)
+#include <iostream>
+
+Renderer::Renderer()
 {
+	window.create(sf::VideoMode(300, 225), "ShellProtector", sf::Style::Close);
+	std::cout << "Window Init\n";
 	window.setFramerateLimit(60);
 	ImGui::SFML::Init(window);
 }
