@@ -8,6 +8,7 @@ public:
 	int port;
 	bool parameter_multiplexing;
 	int refresh_rate;
+	bool start_and_hide;
 public:
 	void SaveFile();
 };
