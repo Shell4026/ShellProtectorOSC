@@ -14,6 +14,8 @@
 #include "Save.h"
 #include "Load.h"
 
+#include "tray.hpp"
+
 #if _WIN32
 #include <windows.h>
 #define MAIN APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
@@ -24,6 +26,9 @@
 
 std::atomic_bool stop = false;
 std::atomic_bool start = false;
+std::atomic_bool hide_window = false;
+
+Tray::Tray tray("Shell Protector OSC", "icon.ico");
 
 int key_idx = 0;
 int key_length = 4;
@@ -35,6 +40,7 @@ int port = 9000;
 bool show_log = false;
 bool parameter_multiplexing = false;
 bool save = true;
+bool start_and_hide = false;
 
 void DisplayTooltip(const char* desc)
 {
@@ -43,7 +49,7 @@ void DisplayTooltip(const char* desc)
 	if (ImGui::IsItemHovered())
 	{
 		ImGui::BeginTooltip();
-		ImGui::PushTextWrapPos(290.0f);
+		ImGui::PushTextWrapPos(WINDOW_WIDTH - 10);
 		ImGui::TextUnformatted(desc);
 		ImGui::PopTextWrapPos();
 		ImGui::EndTooltip();
@@ -57,7 +63,7 @@ void DrawUI(OSC& osc)
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoSavedSettings;
 
-	ImGui::SetNextWindowSize(ImVec2(300, 225));
+	ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
 	ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
 	ImGui::Begin("Window", 0, flags);
 
@@ -105,6 +111,10 @@ void DrawUI(OSC& osc)
 	ImGui::SameLine();
 	ImGui::Checkbox("##save", &save);
 
+	ImGui::Text("Start & Hide window on start");
+	ImGui::SameLine();
+	ImGui::Checkbox("##start_and_hide", &start_and_hide);
+
 	ImGui::SetNextItemWidth(100);
 	if (!start)
 	{
@@ -120,7 +130,10 @@ void DrawUI(OSC& osc)
 			start = false;
 	}
 
-	ImGui::SetCursorPosY(225 - 30);
+	if (ImGui::Button("Hide window"))
+		hide_window = true;
+
+	ImGui::SetCursorPosY(WINDOW_HEIGHT - 30);
 	if(ImGui::Button("Logs"))
 	{
 		show_log = true;
@@ -133,7 +146,7 @@ void DrawLog(OSC &osc) {
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoSavedSettings;
 
-	ImGui::SetNextWindowSize(ImVec2(300, 200));
+	ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
 	ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
 	
 	ImGui::Begin("Log", 0, flags);
@@ -185,6 +198,7 @@ int MAIN
 		port = loader.port;
 		parameter_multiplexing = loader.parameter_multiplexing;
 		refreshRate = loader.refresh_rate;
+		start_and_hide = loader.start_and_hide;
 	}
 	std::cout << "Load save file\n";
 
@@ -281,6 +295,28 @@ int MAIN
 	std::cout << "Renderer Init\n";
 	sf::Clock delta_clock;
 
+	tray.addEntry(Tray::Button("Show window", [](){
+		hide_window = false;
+	}));
+
+	tray.addEntry(Tray::Button("Exit", [renderer](){
+		start = false;
+		stop = true;
+		renderer->Stop();
+	}));
+
+	std::thread tray_thread = std::thread([](){
+		tray.run();
+	});
+
+	if (start_and_hide) {
+		start = true;
+		hide_window = true;
+		renderer->HideWindow();
+	} else {
+		renderer->ShowWindow();
+	}
+
 	while (renderer->GetWindow()->isOpen())
 	{
 		renderer->Update(delta_clock.restart());
@@ -289,12 +325,22 @@ int MAIN
 		else
 			DrawLog(osc);
 		renderer->Render();
+		if (hide_window) {
+			renderer->HideWindow();
+		} else {
+			renderer->ShowWindow();
+		}
 	}
 
 	stop = true;
 	start = false;
 
 	std::cout << "End\n";
+
+	tray.exit();
+	if(tray_thread.joinable())
+		tray_thread.join();
+
 	if(thr.joinable())
 		thr.join();
 
@@ -306,6 +352,7 @@ int MAIN
 		saver.port = port;
 		saver.parameter_multiplexing = parameter_multiplexing;
 		saver.refresh_rate = refreshRate;
+		saver.start_and_hide = start_and_hide;
 		saver.SaveFile();
 	}
 	return 0;

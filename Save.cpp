@@ -13,5 +13,6 @@ void Save::SaveFile()
 	fprintf(f, "\n%d", port);
 	fprintf(f, "\n%d", parameter_multiplexing);
 	fprintf(f, "\n%d", refresh_rate);
+	fprintf(f, "\n%d", start_and_hide);
 	fclose(f);
 }

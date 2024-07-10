@@ -31,6 +31,10 @@ bool Load::LoadFile()
 		fgets(str, sizeof(str), f);
 		refresh_rate = std::stoi(str);
 	}
+	if (!feof(f)) {
+		fgets(str, sizeof(str), f);
+		start_and_hide = std::stoi(str);
+	}
 	fclose(f);
 	return true;
 }
