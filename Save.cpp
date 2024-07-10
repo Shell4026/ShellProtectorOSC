@@ -8,7 +8,10 @@ void Save::SaveFile()
 	if (f == NULL)
 		return;
 
-	fprintf(f, password.c_str());
+	fprintf(f, "%s", password.c_str());
 	fprintf(f, "\n%d", key_idx);
+	fprintf(f, "\n%d", port);
+	fprintf(f, "\n%d", parameter_multiplexing);
+	fprintf(f, "\n%d", refresh_rate);
 	fclose(f);
 }

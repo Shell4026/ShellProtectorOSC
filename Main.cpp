@@ -18,7 +18,7 @@
 #include <windows.h>
 #define MAIN APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
 //#define MAIN main()
-#elif
+#else
 #define MAIN main()
 #endif
 
@@ -34,7 +34,7 @@ int port = 9000;
 
 bool show_log = false;
 bool parameter_multiplexing = false;
-bool save_password = true;
+bool save = true;
 
 void DisplayTooltip(const char* desc)
 {
@@ -103,7 +103,7 @@ void DrawUI(OSC& osc)
 
 	ImGui::Text("Save password");
 	ImGui::SameLine();
-	ImGui::Checkbox("##save_password", &save_password);
+	ImGui::Checkbox("##save", &save);
 
 	ImGui::SetNextItemWidth(100);
 	if (!start)
@@ -182,6 +182,9 @@ int MAIN
 			password[i] = loader.password[i];
 		}
 		key_idx = loader.key_idx;
+		port = loader.port;
+		parameter_multiplexing = loader.parameter_multiplexing;
+		refreshRate = loader.refresh_rate;
 	}
 	std::cout << "Load save file\n";
 
@@ -295,11 +298,14 @@ int MAIN
 	if(thr.joinable())
 		thr.join();
 
-	if (save_password)
+	if (save)
 	{
 		Save saver;
 		saver.password = password;
 		saver.key_idx = key_idx;
+		saver.port = port;
+		saver.parameter_multiplexing = parameter_multiplexing;
+		saver.refresh_rate = refreshRate;
 		saver.SaveFile();
 	}
 	return 0;
