@@ -295,19 +295,20 @@ int MAIN
 	std::cout << "Renderer Init\n";
 	sf::Clock delta_clock;
 
-	tray.addEntry(Tray::Button("Show window", [](){
+	tray.addEntry(Tray::Button("Show window", [&]() {
 		hide_window = false;
-	}));
+		}));
 
-	tray.addEntry(Tray::Button("Exit", [renderer](){
+	tray.addEntry(Tray::Button("Exit", [&]() {
 		start = false;
 		stop = true;
 		renderer->Stop();
-	}));
+		}));
 
-	std::thread tray_thread = std::thread([](){
+	std::thread tray_thread = std::thread([&](){
 		tray.run();
 	});
+	tray_thread.detach();
 
 	if (start_and_hide) {
 		start = true;
@@ -334,12 +335,9 @@ int MAIN
 
 	stop = true;
 	start = false;
+	tray.exit();
 
 	std::cout << "End\n";
-
-	tray.exit();
-	if(tray_thread.joinable())
-		tray_thread.join();
 
 	if(thr.joinable())
 		thr.join();
