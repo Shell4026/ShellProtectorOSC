@@ -7,3 +7,4 @@ https://github.com/Shell4026/ShellProtector
 
 * SFML
 * Imgui
+* traypp - https://github.com/Soundux/traypp
