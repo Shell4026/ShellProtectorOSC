@@ -101,7 +101,7 @@ void DrawUI(OSC& osc)
 		ImGui::InputInt("##Refresh rate", &refreshRate, 0, 0);
 	}
 
-	ImGui::Text("Save password");
+	ImGui::Text("Save Option");
 	ImGui::SameLine();
 	ImGui::Checkbox("##save", &save);
 
