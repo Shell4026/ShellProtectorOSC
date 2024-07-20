@@ -286,7 +286,8 @@ int MAIN
 				}
 				std::this_thread::sleep_for(std::chrono::seconds(1));
 			}
-			std::this_thread::sleep_for(std::chrono::seconds(1));
+			else
+				std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 	});
 	std::cout << "Thread Init\n";
