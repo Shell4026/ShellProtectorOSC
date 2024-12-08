@@ -5,8 +5,8 @@
 #include "imgui.h"
 #include "imgui-SFML.h"
 
-UI::UI(Core& core, const Renderer& renderer) :
-	core(core), renderer(renderer), osc(core.GetOSC())
+UI::UI(Core& core) :
+	core(core), osc(core.GetOSC())
 {
 }
 
