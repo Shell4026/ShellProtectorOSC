@@ -21,7 +21,7 @@ int MAIN
 	Renderer* renderer = Renderer::GetInstance();
 	std::cout << "Renderer Init\n";
 
-	UI ui{ core, *renderer };
+	UI ui{ core };
 
 	sf::Clock deltaClock;
 
