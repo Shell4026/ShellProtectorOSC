@@ -129,10 +129,10 @@ void UI::RenderLog()
 		osc.ClearLogs();
 	ImGui::SameLine();
 	if (ImGui::Button("Lock"))
-		osc.log_lock = !osc.log_lock;
+		osc.bLogLock = !osc.bLogLock;
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(100);
-	ImGui::InputInt("Max", &osc.max_log, 0, 0);
+	ImGui::InputInt("Max", &osc.maxLog, 0, 0);
 
 	ImGui::Separator();
 	ImGui::BeginChild("Scrolling", ImVec2(0.f, 0.f), true, ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_HorizontalScrollbar);

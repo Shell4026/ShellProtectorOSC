@@ -6,21 +6,6 @@
 
 #include <iostream>
 
-Renderer::Renderer()
-{
-	window.create(sf::VideoMode(1, 1), "ShellProtector", sf::Style::Close);
-	window.setVisible(false);
-	window_visibility = false;
-	std::cout << "Window Init\n";
-	window.setFramerateLimit(60);
-	ImGui::SFML::Init(window);
-}
-
-Renderer::~Renderer()
-{
-	ImGui::SFML::Shutdown();
-}
-
 auto Renderer::GetInstance() -> Renderer*
 {
 	if (instance == nullptr)
@@ -65,20 +50,35 @@ void Renderer::Render()
 
 void Renderer::ShowWindow()
 {
-	if (window_visibility) return;
+	if (bWindowVisible) return;
 	window.setVisible(true);
-	window_visibility = true;
+	bWindowVisible = true;
 	window.setSize(sf::Vector2u(WINDOW_WIDTH, WINDOW_HEIGHT));
 }
 
 void Renderer::HideWindow()
 {
-	if (!window_visibility) return;
+	if (!bWindowVisible) return;
 	window.setVisible(false);
-	window_visibility = false;
+	bWindowVisible = false;
 	window.setSize(sf::Vector2u(1, 1));
 }
 
 void Renderer::Stop() {
 	window.close();
+}
+
+Renderer::Renderer()
+{
+	window.create(sf::VideoMode(1, 1), "ShellProtector", sf::Style::Close);
+	window.setVisible(false);
+	bWindowVisible = false;
+	std::cout << "Window Init\n";
+	window.setFramerateLimit(60);
+	ImGui::SFML::Init(window);
+}
+
+Renderer::~Renderer()
+{
+	ImGui::SFML::Shutdown();
 }

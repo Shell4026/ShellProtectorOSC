@@ -7,15 +7,6 @@
 
 class OSC
 {
-private:
-	sf::UdpSocket socket;
-
-	std::string addr;
-	std::deque<std::string> logs;
-	unsigned int port;
-public:
-	int max_log = 100;
-	bool log_lock = false;
 public:
 	OSC();
 	auto GetOSCData(const std::string& oscAddr, float v)->std::vector<unsigned char>;
@@ -34,5 +25,14 @@ public:
 	auto GetLogs() -> const std::deque<std::string>&;
 	void AddLog(const std::string& str);
 	void ClearLogs();
+public:
+	int maxLog = 100;
+	bool bLogLock = false;
+private:
+	sf::UdpSocket socket;
+
+	std::string addr;
+	std::deque<std::string> logs;
+	unsigned int port;
 };
 

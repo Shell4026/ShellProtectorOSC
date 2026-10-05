@@ -1,41 +1,11 @@
 #pragma once
 #include "OSC.h"
-#include "Load.h"
-#include "Save.h"
 
 #include "tray.hpp"
 
 #include <thread>
 class Core
 {
-private:
-	std::atomic_bool stop = false;
-	std::atomic_bool start = false;
-	std::atomic_bool hideWindow = false;
-
-	OSC osc;
-	Load loader;
-	Save saver;
-
-	std::thread oscThread;
-	std::thread trayThread;
-
-	Tray::Tray tray;
-public:
-	int keyIdx = 0;
-	int keyLength = 4;
-	char password[100] = "";
-	int refreshRate = 150;
-	int port = 9000;
-
-	bool bShowLog = false;
-	bool bParameterMultiplexing = false;
-	bool bSave = true;
-	bool bStartAndHide = false;
-	bool bHideWindow = false;
-private:
-	void StartOSCThread();
-	void InitTray();
 public:
 	Core();
 	~Core();
@@ -53,4 +23,28 @@ public:
 	bool IsStarting() const;
 	bool IsFinish() const;
 	bool IsHideWindow() const;
+private:
+	void StartOSCThread();
+	void InitTray();
+public:
+	int keyIdx = 0;
+	int keyLength = 4;
+	char password[100] = "";
+	int refreshRate = 150;
+	int port = 9000;
+
+	bool bShowLog = false;
+	bool bParameterMultiplexing = false;
+	bool bSave = true;
+	bool bStartAndHide = false;
+	bool bHideWindow = false;
+private:
+	std::atomic_bool bStop = false;
+	std::atomic_bool bStart = false;
+
+	OSC osc;
+
+	std::thread oscThread;
+
+	Tray::Tray tray;
 };

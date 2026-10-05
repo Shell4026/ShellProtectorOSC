@@ -1,6 +1,12 @@
 #include "PCH.h"
 #include "OSC.h"
 #include <iostream>
+
+OSC::OSC() :
+	port(0)
+{
+}
+
 auto OSC::GetOSCData(const std::string& oscAddr, float v) -> std::vector<unsigned char>
 {
 	std::vector<unsigned char> data;
@@ -61,11 +67,6 @@ auto OSC::GetOSCData(const std::string& oscAddr, int v) -> std::vector<unsigned 
 		data.push_back(bytes[i]);
 
 	return data;
-}
-
-OSC::OSC() :
-	port(0)
-{
 }
 
 void OSC::Init(const std::string& address, unsigned int port)
@@ -140,10 +141,10 @@ auto OSC::GetLogs() -> const std::deque<std::string>&
 
 void OSC::AddLog(const std::string& str)
 {
-	if (log_lock == true)
+	if (bLogLock == true)
 		return;
 
-	while (logs.size() > max_log)
+	while (logs.size() > maxLog)
 		logs.pop_front();
 	logs.push_back(str);
 }

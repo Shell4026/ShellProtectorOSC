@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "Core.h"
+#include "Settings.h"
 #include "SHA256.h"
 
 #include <iostream>
@@ -7,45 +8,148 @@
 #include <string>
 #include <thread>
 
+Core::Core() :
+	tray("Shell Protector OSC", "icon.ico")
+{
+	Settings settings;
+	if (!settings.Load())
+		osc.AddLog("Can't load save file");
+	else
+	{
+		for (int i = 0; i < settings.password.size(); ++i)
+		{
+			password[i] = settings.password[i];
+		}
+		keyIdx = settings.keyIdx;
+		port = settings.port;
+		bParameterMultiplexing = settings.bParameterMultiplexing;
+		refreshRate = settings.refreshRate;
+		bStartAndHide = settings.bStartAndHide;
+		if (bStartAndHide)
+			bHideWindow = true;
+	}
+	std::cout << "Load save file\n";
+}
+
+Core::~Core()
+{
+	tray.exit();
+
+	if (bSave)
+	{
+		Settings settings;
+		settings.password = password;
+		settings.keyIdx = keyIdx;
+		settings.port = port;
+		settings.bParameterMultiplexing = bParameterMultiplexing;
+		settings.refreshRate = refreshRate;
+		settings.bStartAndHide = bStartAndHide;
+		settings.Save();
+	}
+
+	if(oscThread.joinable())
+		oscThread.join();
+
+	std::cout << "End\n";
+}
+
+void Core::Init()
+{
+	std::cout << "Start...\n";
+	OSC osc;
+	osc.Init("127.0.0.1", port);
+	std::cout << "OSC Init\n";
+
+	StartOSCThread();
+	InitTray();
+
+	if (bStartAndHide)
+		StartOSC();
+}
+
+void Core::StartOSC()
+{
+	bStart.store(true, std::memory_order_release);
+}
+void Core::StopOSC()
+{
+	bStart.store(false, std::memory_order_release);
+}
+
+void Core::Shutdown()
+{
+	bStop.store(true, std::memory_order_release);
+	bStart.store(false, std::memory_order_release);
+}
+
+auto Core::GetOSC() const -> const OSC&
+{
+	return osc;
+}
+auto Core::GetOSC() -> OSC&
+{
+	return osc;
+}
+bool Core::IsStartAndHide() const
+{
+	return bStartAndHide;
+}
+bool Core::IsShowLog() const
+{
+	return bShowLog;
+}
+bool Core::IsStarting() const
+{
+	return bStart.load(std::memory_order_acquire);
+}
+bool Core::IsFinish() const
+{
+	return bStop.load(std::memory_order_acquire);
+}
+bool Core::IsHideWindow() const
+{
+	return bHideWindow;
+}
+
 void Core::StartOSCThread()
 {
 	oscThread = std::thread([&]
 	{
 		const float factor = pow(10.0f, 4);
-		std::string osc_addr = "";
+		std::string oscAddr = "";
 
 		auto switch0 = [&](int n)
 			{
 				bool s = false;
-				osc_addr = "/avatar/parameters/encrypt_switch0";
+				oscAddr = "/avatar/parameters/encrypt_switch0";
 				s = (n & 0b0001) == 1 ? true : false;
-				osc.SendOSC(osc_addr, s);
+				osc.SendOSC(oscAddr, s);
 			};
 		auto switch1 = [&](int n)
 			{
 				bool s = false;
-				osc_addr = "/avatar/parameters/encrypt_switch1";
+				oscAddr = "/avatar/parameters/encrypt_switch1";
 				s = (n & 0b0010) == 2 ? true : false;
-				osc.SendOSC(osc_addr, s);
+				osc.SendOSC(oscAddr, s);
 			};
 		auto switch2 = [&](int n)
 			{
 				bool s = false;
-				osc_addr = "/avatar/parameters/encrypt_switch2";
+				oscAddr = "/avatar/parameters/encrypt_switch2";
 				s = (n & 0b0100) == 4 ? true : false;
-				osc.SendOSC(osc_addr, s);
+				osc.SendOSC(oscAddr, s);
 			};
 		auto switch3 = [&](int n)
 			{
 				bool s = false;
-				osc_addr = "/avatar/parameters/encrypt_switch3";
+				oscAddr = "/avatar/parameters/encrypt_switch3";
 				s = (n & 0b1000) == 8 ? true : false;
-				osc.SendOSC(osc_addr, s);
+				osc.SendOSC(oscAddr, s);
 			};
 
-		while (!stop.load(std::memory_order_acquire))
+		while (!bStop.load(std::memory_order_acquire))
 		{
-			if (start.load(std::memory_order_acquire))
+			if (bStart.load(std::memory_order_acquire))
 			{
 				osc.SetOSCPort(port);
 				SHA256 sha;
@@ -56,8 +160,8 @@ void Core::StartOSCThread()
 				{
 					if (bParameterMultiplexing)
 					{
-						std::string osc_addr = "/avatar/parameters/encrypt_lock";
-						osc.SendOSC(osc_addr, true);
+						oscAddr = "/avatar/parameters/encrypt_lock";
+						osc.SendOSC(oscAddr, true);
 						switch (keyLength)
 						{
 						default: //fall down
@@ -83,16 +187,16 @@ void Core::StartOSCThread()
 					pwd = -(roundf(pwd * factor) / factor); //Rounding to 4 digits
 
 					if (bParameterMultiplexing)
-						osc_addr = "/avatar/parameters/pkey";
+						oscAddr = "/avatar/parameters/pkey";
 					else
-						osc_addr = "/avatar/parameters/pkey" + std::to_string(i);
-					osc.SendOSC(osc_addr, pwd);
+						oscAddr = "/avatar/parameters/pkey" + std::to_string(i);
+					osc.SendOSC(oscAddr, pwd);
 					std::this_thread::sleep_for(std::chrono::milliseconds(refreshRate));
 					/////////////////////////////////////////////////
 					if (bParameterMultiplexing)
 					{
-						osc_addr = "/avatar/parameters/encrypt_lock";
-						osc.SendOSC(osc_addr, false);
+						oscAddr = "/avatar/parameters/encrypt_lock";
+						osc.SendOSC(oscAddr, false);
 					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				}
@@ -116,111 +220,9 @@ void Core::InitTray()
 	{
 		Shutdown();
 	}));
-	std::thread tray_thread = std::thread([&]()
+	std::thread trayThread = std::thread([&]()
 	{
 		tray.run();
 	});
-	tray_thread.detach();
-}
-
-Core::Core() :
-	tray("Shell Protector OSC", "icon.ico")
-{
-	Load loader;
-	if (!loader.LoadFile())
-		osc.AddLog("Can't load save file");
-	else
-	{
-		for (int i = 0; i < loader.password.size(); ++i)
-		{
-			password[i] = loader.password[i];
-		}
-		keyIdx = loader.keyIdx;
-		port = loader.port;
-		bParameterMultiplexing = loader.bParameterMultiplexing;
-		refreshRate = loader.refreshRate;
-		bStartAndHide = loader.bStartAndHide;
-		if (bStartAndHide)
-			bHideWindow = true;
-	}
-	std::cout << "Load save file\n";
-}
-
-Core::~Core()
-{
-	tray.exit();
-
-	if (bSave)
-	{
-		saver.password = password;
-		saver.keyIdx = keyIdx;
-		saver.port = port;
-		saver.bParameterMultiplexing = bParameterMultiplexing;
-		saver.refreshRate = refreshRate;
-		saver.bStartAndHide = bStartAndHide;
-		saver.SaveFile();
-	}
-
-	if(oscThread.joinable())
-		oscThread.join();
-
-	std::cout << "End\n";
-}
-
-void Core::Init()
-{
-	std::cout << "Start...\n";
-	OSC osc;
-	osc.Init("127.0.0.1", port);
-	std::cout << "OSC Init\n";
-
-	StartOSCThread();
-	InitTray();
-
-	if (bStartAndHide)
-		StartOSC();
-}
-
-void Core::StartOSC()
-{
-	start.store(true, std::memory_order_release);
-}
-void Core::StopOSC()
-{
-	start.store(false, std::memory_order_release);
-}
-
-void Core::Shutdown()
-{
-	stop.store(true, std::memory_order_release);
-	start.store(false, std::memory_order_release);
-}
-
-auto Core::GetOSC() const -> const OSC&
-{
-	return osc;
-}
-auto Core::GetOSC() -> OSC&
-{
-	return osc;
-}
-bool Core::IsStartAndHide() const
-{
-	return bStartAndHide;
-}
-bool Core::IsShowLog() const
-{
-	return bShowLog;
-}
-bool Core::IsStarting() const
-{
-	return start.load(std::memory_order_acquire);
-}
-bool Core::IsFinish() const
-{
-	return stop.load(std::memory_order_acquire);
-}
-bool Core::IsHideWindow() const
-{
-	return bHideWindow;
+	trayThread.detach();
 }
