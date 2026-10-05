@@ -2,6 +2,7 @@
 #include "Core.h"
 #include "Settings.h"
 #include "SHA256.h"
+#include "Path.h"
 
 #include <iostream>
 #include <cmath>
@@ -9,8 +10,19 @@
 #include <thread>
 #include <memory>
 
+static auto LoadTrayIcon() -> Tray::Icon
+{
+	const auto iconPath = Path::GetExeDir() / "icon.ico";
+#if _WIN32
+	// Load with the wide-char API so non-ASCII install paths work
+	return Tray::Icon(static_cast<HICON>(LoadImageW(nullptr, iconPath.c_str(), IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE)));
+#else
+	return Tray::Icon(iconPath.string());
+#endif
+}
+
 Core::Core() :
-	tray("Shell Protector OSC", "icon.ico")
+	tray("Shell Protector OSC", LoadTrayIcon())
 {
 	Settings settings;
 	if (!settings.Load())

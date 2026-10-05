@@ -1,12 +1,18 @@
 #include "PCH.h"
 #include "Settings.h"
+#include "Path.h"
 
 #include <cstdio>
+
+static auto GetSaveFilePath() -> std::filesystem::path
+{
+	return Path::GetExeDir() / L"save.sav";
+}
 
 bool Settings::Load()
 {
 	FILE* f;
-	fopen_s(&f, "save.sav", "r");
+	_wfopen_s(&f, GetSaveFilePath().c_str(), L"r");
 	if (f == NULL)
 		return false;
 
@@ -45,7 +51,7 @@ bool Settings::Load()
 void Settings::Save() const
 {
 	FILE* f;
-	fopen_s(&f, "save.sav", "w");
+	_wfopen_s(&f, GetSaveFilePath().c_str(), L"w");
 	if (f == NULL)
 		return;
 

@@ -76,6 +76,7 @@ Renderer::Renderer()
 	std::cout << "Window Init\n";
 	window.setFramerateLimit(60);
 	ImGui::SFML::Init(window);
+	ImGui::GetIO().IniFilename = nullptr; // All windows use NoSavedSettings; don't write imgui.ini into the working directory
 }
 
 Renderer::~Renderer()
