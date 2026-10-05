@@ -149,14 +149,23 @@ namespace
 		std::string lockAddr;
 		std::array<std::string, 4> switchAddrs;
 		std::string multiplexedKeyAddr;
-		std::vector<std::string> keyAddrs; // Without multiplexing, one per key byte
+		std::vector<std::string> keyAddrs; // One per key byte
 		std::vector<uint8_t> keyBytes;
+		bool multiplexed = false; // Cycle the key bytes through lockAddr, switchAddrs and multiplexedKeyAddr
+		bool direct = false; // Send each key byte to its own keyAddrs entry
 		bool legacy = false; // Selects the key byte encoding the avatar's animations expect
 	};
 
+	// Which protocol an avatar uses depends on its sync speed (ParameterManager on the Unity side):
+	// - 1: this app multiplexes the key through encrypt_lock, encrypt_switch* and pkey.
+	// - 2 or 4: this app writes each byte to the saved parameter saved_key*, and the avatar syncs them itself
+	//   with parameters of other names.
+	// The names of the two never overlap and VRChat ignores parameters an avatar doesn't have, so both are sent.
 	auto MakeTarget(const std::string& prefix, const UserKey& key, int keyLen) -> Target
 	{
 		Target target;
+		target.multiplexed = true;
+		target.direct = true;
 		target.lockAddr = prefix + key.ObfuscateParameter("encrypt_lock");
 		for (int bit = 0; bit < static_cast<int>(target.switchAddrs.size()); ++bit)
 			target.switchAddrs[bit] = prefix + key.ObfuscateParameter("encrypt_switch" + std::to_string(bit));
@@ -169,11 +178,15 @@ namespace
 		return target;
 	}
 
-	// Avatars encrypted with ShellProtector 2.7.0 or earlier: plain names and key = password ^ SHA256(password)
-	auto MakeLegacyTarget(const std::string& prefix, const std::string& password, int keyLen) -> Target
+	// Avatars encrypted with ShellProtector 2.7.0 or earlier: plain names and key = password ^ SHA256(password).
+	// Without multiplexing they have one synced pkey* per key byte, and those names can't be told apart from the
+	// multiplexed ones, so the user picks the protocol.
+	auto MakeLegacyTarget(const std::string& prefix, const std::string& password, int keyLen, bool multiplexing) -> Target
 	{
 		Target target;
 		target.legacy = true;
+		target.multiplexed = multiplexing;
+		target.direct = !multiplexing;
 		target.lockAddr = prefix + "encrypt_lock";
 		for (int bit = 0; bit < static_cast<int>(target.switchAddrs.size()); ++bit)
 			target.switchAddrs[bit] = prefix + "encrypt_switch" + std::to_string(bit);
@@ -257,15 +270,15 @@ void Core::StartOSCThread()
 					targets.push_back(MakeTarget(paramPrefix, it->second, keyLen));
 				}
 				protectedAvatarCount.store(static_cast<int>(targets.size()), std::memory_order_release);
-				targets.push_back(MakeLegacyTarget(paramPrefix, key, keyLen));
+				targets.push_back(MakeLegacyTarget(paramPrefix, key, keyLen, multiplexing));
 
 				osc.SetOSCPort(oscPort);
 
 				for (int i = 0; i < keyLen; ++i)
 				{
-					if (multiplexing)
+					for (const auto& target : targets)
 					{
-						for (const auto& target : targets)
+						if (target.multiplexed)
 						{
 							osc.SendOSC(target.lockAddr, true);
 							// Switch bit b selects key byte i; 4/8/16 byte keys use 2/3/4 switches
@@ -278,14 +291,17 @@ void Core::StartOSCThread()
 					for (const auto& target : targets)
 					{
 						osc.AddLog(std::to_string(i) + ":" + std::to_string(target.keyBytes[i]));
-						osc.SendOSC(multiplexing ? target.multiplexedKeyAddr : target.keyAddrs[i],
-							target.legacy ? EncodeLegacyKeyByte(target.keyBytes[i]) : EncodeKeyByte(target.keyBytes[i]));
+						const float value = target.legacy ? EncodeLegacyKeyByte(target.keyBytes[i]) : EncodeKeyByte(target.keyBytes[i]);
+						if (target.multiplexed)
+							osc.SendOSC(target.multiplexedKeyAddr, value);
+						if (target.direct)
+							osc.SendOSC(target.keyAddrs[i], value);
 					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(rate));
 					/////////////////////////////////////////////////
-					if (multiplexing)
+					for (const auto& target : targets)
 					{
-						for (const auto& target : targets)
+						if (target.multiplexed)
 							osc.SendOSC(target.lockAddr, false);
 					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));

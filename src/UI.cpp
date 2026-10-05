@@ -38,12 +38,12 @@ void UI::Render()
 	ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
 	ImGui::Begin("Window", 0, flags);
 
-	float textWidth = ImGui::CalcTextSize("Shell Protector").x;
+	float textWidth = ImGui::CalcTextSize("Shell Protector OSC 1.7").x;
 	float windowWidth = ImGui::GetWindowWidth();
 	float centerPosX = (windowWidth - textWidth) * 0.5f;
 	ImGui::SetCursorPosX(centerPosX);
 	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-	ImGui::Text("Shell Protector OSC");
+	ImGui::Text("Shell Protector OSC 1.7");
 	ImGui::PopStyleColor();
 	ImGui::Separator();
 
@@ -67,16 +67,15 @@ void UI::Render()
 	ImGui::Spacing();
 
 	ImGui::Text("Parameter-multiplexing");
+	DisplayTooltip("Only for avatars encrypted with ShellProtector 2.7 or earlier. Newer avatars are detected automatically.");
 	ImGui::SameLine();
 	ImGui::Checkbox("##bParameterMultiplexing", &core.bParameterMultiplexing);
-	if (core.bParameterMultiplexing)
-	{
-		ImGui::Text("Refresh rate(ms)");
-		DisplayTooltip("The wait time before sending the next OSC data. If you can't decrypt when viewed by other users, try increasing this value.");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(50);
-		ImGui::InputInt("##Refresh rate", &core.refreshRate, 0, 0);
-	}
+
+	ImGui::Text("Refresh rate(ms)");
+	DisplayTooltip("The wait time before sending the next OSC data. If you can't decrypt when viewed by other users, try increasing this value.");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(50);
+	ImGui::InputInt("##Refresh rate", &core.refreshRate, 0, 0);
 
 	ImGui::Text("Save Option");
 	ImGui::SameLine();
