@@ -7,6 +7,7 @@
 #include <cmath>
 #include <string>
 #include <thread>
+#include <memory>
 
 Core::Core() :
 	tray("Shell Protector OSC", "icon.ico")
@@ -56,7 +57,6 @@ Core::~Core()
 void Core::Init()
 {
 	std::cout << "Start...\n";
-	OSC osc;
 	osc.Init("127.0.0.1", port);
 	std::cout << "OSC Init\n";
 
@@ -80,6 +80,11 @@ void Core::Shutdown()
 {
 	bStop.store(true, std::memory_order_release);
 	bStart.store(false, std::memory_order_release);
+}
+
+auto Core::LockSettings() -> std::unique_lock<std::mutex>
+{
+	return std::unique_lock<std::mutex>(settingsMutex);
 }
 
 auto Core::GetOSC() const -> const OSC&
@@ -151,18 +156,31 @@ void Core::StartOSCThread()
 		{
 			if (bStart.load(std::memory_order_acquire))
 			{
-				osc.SetOSCPort(port);
-				SHA256 sha;
-				sha.update(password);
-				uint8_t* digest = sha.digest();
-
-				for (int i = 0; i < keyLength; ++i)
+				// Snapshot the settings so the UI thread can edit them while sending
+				std::string key;
+				int keyLen, rate, oscPort;
+				bool multiplexing;
 				{
-					if (bParameterMultiplexing)
+					std::lock_guard<std::mutex> lock(settingsMutex);
+					key = password; // Up to the null terminator
+					keyLen = keyLength;
+					rate = refreshRate;
+					oscPort = port;
+					multiplexing = bParameterMultiplexing;
+				}
+
+				osc.SetOSCPort(oscPort);
+				SHA256 sha;
+				sha.update(key);
+				std::unique_ptr<uint8_t[]> digest(sha.digest());
+
+				for (int i = 0; i < keyLen; ++i)
+				{
+					if (multiplexing)
 					{
 						oscAddr = "/avatar/parameters/encrypt_lock";
 						osc.SendOSC(oscAddr, true);
-						switch (keyLength)
+						switch (keyLen)
 						{
 						default: //fall down
 							switch3(i);
@@ -175,25 +193,21 @@ void Core::StartOSCThread()
 						}
 					}
 					///////////////////Send password////////////////
-					if (password[i] == 0)
-					{
-						for (int j = i + 1; j < sizeof(password); ++j)
-							password[j] = 0;
-					}
+					char c = static_cast<std::size_t>(i) < key.size() ? key[i] : 0; // Characters after the terminator count as 0
 					float pwd;
-					unsigned char var = password[i] ^ digest[i];
+					unsigned char var = c ^ digest[i];
 					osc.AddLog(std::to_string(i) + ":" + std::to_string(var));
 					pwd = 1 - var / 128.0f;
 					pwd = -(roundf(pwd * factor) / factor); //Rounding to 4 digits
 
-					if (bParameterMultiplexing)
+					if (multiplexing)
 						oscAddr = "/avatar/parameters/pkey";
 					else
 						oscAddr = "/avatar/parameters/pkey" + std::to_string(i);
 					osc.SendOSC(oscAddr, pwd);
-					std::this_thread::sleep_for(std::chrono::milliseconds(refreshRate));
+					std::this_thread::sleep_for(std::chrono::milliseconds(rate));
 					/////////////////////////////////////////////////
-					if (bParameterMultiplexing)
+					if (multiplexing)
 					{
 						oscAddr = "/avatar/parameters/encrypt_lock";
 						osc.SendOSC(oscAddr, false);

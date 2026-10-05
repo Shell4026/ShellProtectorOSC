@@ -2,6 +2,8 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <mutex>
+#include <atomic>
 
 #include "SFML/Network.hpp"
 
@@ -22,17 +24,18 @@ public:
 	bool SendOSC(std::string oscAddr, bool v);
 	bool SendOSC(std::string oscAddr, int v);
 
-	auto GetLogs() -> const std::deque<std::string>&;
+	auto GetLogs() const -> std::deque<std::string>;
 	void AddLog(const std::string& str);
 	void ClearLogs();
 public:
-	int maxLog = 100;
-	bool bLogLock = false;
+	std::atomic_int maxLog = 100;
+	std::atomic_bool bLogLock = false;
 private:
 	sf::UdpSocket socket;
 
 	std::string addr;
 	std::deque<std::string> logs;
+	mutable std::mutex logMutex;
 	unsigned int port;
 };
 

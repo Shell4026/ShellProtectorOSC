@@ -1,6 +1,6 @@
 #include "UI.h"
 #include "Renderer.h"
-#include "core.h"
+#include "Core.h"
 
 #include "imgui.h"
 #include "imgui-SFML.h"
@@ -30,6 +30,8 @@ void UI::Render()
 		ImGuiWindowFlags_NoDecoration |
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoSavedSettings;
+
+	auto settingsLock = core.LockSettings();
 
 	ImGui::SetNextWindowSize(ImVec2(Renderer::WINDOW_WIDTH, Renderer::WINDOW_HEIGHT));
 	ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
@@ -88,7 +90,6 @@ void UI::Render()
 	{
 		if (ImGui::Button("Start!"))
 		{
-			std::cout << core.password << '\n';
 			core.StartOSC();
 		}
 	}
@@ -132,14 +133,16 @@ void UI::RenderLog()
 		osc.bLogLock = !osc.bLogLock;
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(100);
-	ImGui::InputInt("Max", &osc.maxLog, 0, 0);
+	int maxLog = osc.maxLog;
+	if (ImGui::InputInt("Max", &maxLog, 0, 0))
+		osc.maxLog = maxLog < 1 ? 1 : maxLog;
 
 	ImGui::Separator();
 	ImGui::BeginChild("Scrolling", ImVec2(0.f, 0.f), true, ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_HorizontalScrollbar);
 
 	for (auto& log : osc.GetLogs())
 	{
-		ImGui::Text(log.c_str());
+		ImGui::TextUnformatted(log.c_str());
 		ImGui::Spacing();
 	}
 	ImGui::EndChild();

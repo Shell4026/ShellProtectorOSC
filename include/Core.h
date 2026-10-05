@@ -4,6 +4,8 @@
 #include "tray.hpp"
 
 #include <thread>
+#include <mutex>
+#include <atomic>
 class Core
 {
 public:
@@ -14,6 +16,8 @@ public:
 	void StartOSC();
 	void StopOSC();
 	void Shutdown();
+
+	auto LockSettings() -> std::unique_lock<std::mutex>;
 
 	auto GetOSC() const -> const OSC&;
 	auto GetOSC() -> OSC&;
@@ -41,6 +45,8 @@ public:
 private:
 	std::atomic_bool bStop = false;
 	std::atomic_bool bStart = false;
+
+	std::mutex settingsMutex;
 
 	OSC osc;
 

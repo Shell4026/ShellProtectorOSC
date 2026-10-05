@@ -134,8 +134,9 @@ bool OSC::SendOSC(std::string oscAddr, int v)
 	return true;
 }
 
-auto OSC::GetLogs() -> const std::deque<std::string>&
+auto OSC::GetLogs() const -> std::deque<std::string>
 {
+	std::lock_guard<std::mutex> lock(logMutex);
 	return logs;
 }
 
@@ -144,12 +145,14 @@ void OSC::AddLog(const std::string& str)
 	if (bLogLock == true)
 		return;
 
-	while (logs.size() > maxLog)
+	std::lock_guard<std::mutex> lock(logMutex);
+	while (logs.size() > static_cast<std::size_t>(maxLog.load()))
 		logs.pop_front();
 	logs.push_back(str);
 }
 
 void OSC::ClearLogs()
 {
+	std::lock_guard<std::mutex> lock(logMutex);
 	logs.clear();
 }
