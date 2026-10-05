@@ -12,6 +12,6 @@ public:
 	int keyIdx = 0;
 	int port = 9000;
 	int refreshRate = 150;
-	bool bParameterMultiplexing = false;
+	bool bParameterMultiplexing = true;
 	bool bStartAndHide = false;
 };

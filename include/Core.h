@@ -38,7 +38,7 @@ public:
 	int port = 9000;
 
 	bool bShowLog = false;
-	bool bParameterMultiplexing = false;
+	bool bParameterMultiplexing = true;
 	bool bSave = true;
 	bool bStartAndHide = false;
 	bool bHideWindow = false;

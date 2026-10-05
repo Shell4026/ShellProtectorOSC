@@ -2,6 +2,7 @@
 #include "Core.h"
 #include "Settings.h"
 #include "SHA256.h"
+#include "ParameterObfuscator.h"
 #include "Path.h"
 #include "AutoStart.h"
 
@@ -10,6 +11,7 @@
 #include <string>
 #include <thread>
 #include <memory>
+#include <array>
 
 static auto LoadTrayIcon() -> Tray::Icon
 {
@@ -136,35 +138,15 @@ void Core::StartOSCThread()
 	oscThread = std::thread([&]
 	{
 		const float factor = pow(10.0f, 4);
+		const std::string paramPrefix = "/avatar/parameters/";
 		std::string oscAddr = "";
+		std::string lockAddr = "";
+		std::array<std::string, 4> switchAddrs;
 
-		auto switch0 = [&](int n)
+		// Sends bit `bit` of n to encrypt_switch<bit>
+		auto sendSwitch = [&](int bit, int n)
 			{
-				bool s = false;
-				oscAddr = "/avatar/parameters/encrypt_switch0";
-				s = (n & 0b0001) == 1 ? true : false;
-				osc.SendOSC(oscAddr, s);
-			};
-		auto switch1 = [&](int n)
-			{
-				bool s = false;
-				oscAddr = "/avatar/parameters/encrypt_switch1";
-				s = (n & 0b0010) == 2 ? true : false;
-				osc.SendOSC(oscAddr, s);
-			};
-		auto switch2 = [&](int n)
-			{
-				bool s = false;
-				oscAddr = "/avatar/parameters/encrypt_switch2";
-				s = (n & 0b0100) == 4 ? true : false;
-				osc.SendOSC(oscAddr, s);
-			};
-		auto switch3 = [&](int n)
-			{
-				bool s = false;
-				oscAddr = "/avatar/parameters/encrypt_switch3";
-				s = (n & 0b1000) == 8 ? true : false;
-				osc.SendOSC(oscAddr, s);
+				osc.SendOSC(switchAddrs[bit], ((n >> bit) & 1) == 1);
 			};
 
 		while (!bStop.load(std::memory_order_acquire))
@@ -184,6 +166,11 @@ void Core::StartOSCThread()
 					multiplexing = bParameterMultiplexing;
 				}
 
+				ParameterObfuscator obfuscator(key);
+				lockAddr = paramPrefix + obfuscator.Obfuscate("encrypt_lock");
+				for (int bit = 0; bit < static_cast<int>(switchAddrs.size()); ++bit)
+					switchAddrs[bit] = paramPrefix + obfuscator.Obfuscate("encrypt_switch" + std::to_string(bit));
+
 				osc.SetOSCPort(oscPort);
 				SHA256 sha;
 				sha.update(key);
@@ -193,17 +180,16 @@ void Core::StartOSCThread()
 				{
 					if (multiplexing)
 					{
-						oscAddr = "/avatar/parameters/encrypt_lock";
-						osc.SendOSC(oscAddr, true);
+						osc.SendOSC(lockAddr, true);
 						switch (keyLen)
 						{
 						default: //fall down
-							switch3(i);
+							sendSwitch(3, i);
 						case 8:
-							switch2(i);
+							sendSwitch(2, i);
 						case 4:
-							switch1(i);
-							switch0(i);
+							sendSwitch(1, i);
+							sendSwitch(0, i);
 							break;
 						}
 					}
@@ -216,17 +202,14 @@ void Core::StartOSCThread()
 					pwd = -(roundf(pwd * factor) / factor); //Rounding to 4 digits
 
 					if (multiplexing)
-						oscAddr = "/avatar/parameters/pkey";
+						oscAddr = paramPrefix + obfuscator.Obfuscate("pkey");
 					else
-						oscAddr = "/avatar/parameters/pkey" + std::to_string(i);
+						oscAddr = paramPrefix + "pkey" + std::to_string(i);
 					osc.SendOSC(oscAddr, pwd);
 					std::this_thread::sleep_for(std::chrono::milliseconds(rate));
 					/////////////////////////////////////////////////
 					if (multiplexing)
-					{
-						oscAddr = "/avatar/parameters/encrypt_lock";
-						osc.SendOSC(oscAddr, false);
-					}
+						osc.SendOSC(lockAddr, false);
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				}
 				std::this_thread::sleep_for(std::chrono::seconds(1));
