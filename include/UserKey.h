@@ -8,7 +8,7 @@
 //   password = UTF-8 bytes of the password, truncated to the key length
 //   salt     = ASCII bytes of the 32-character lowercase hex salt string
 //   derived  = PBKDF2-HMAC-SHA256(password, salt, ITERATIONS, 32 bytes)
-//   key      = derived[0, keyLength)
+//   key      = min(derived[i], MAX_KEY_BYTE) for i in [0, keyLength)
 //   name(n)  = ParameterObfuscator(key = derived[16, 32)).Obfuscate(n)
 // The avatar exposes the salt as a local-only parameter named SALT_PARAMETER_PREFIX + salt.
 class UserKey
@@ -25,6 +25,8 @@ public:
 	static constexpr int ITERATIONS = 600000;
 	static constexpr std::size_t SALT_HEX_LENGTH = 32;
 	static constexpr const char* SALT_PARAMETER_PREFIX = "SP_SALT_";
+	// Key bytes travel as synced floats, which carry only 255 distinct values over the network
+	static constexpr uint8_t MAX_KEY_BYTE = 254;
 private:
 	std::array<uint8_t, 32> derived{};
 	std::string salt;

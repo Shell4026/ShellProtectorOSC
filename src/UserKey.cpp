@@ -99,7 +99,7 @@ bool UserKey::IsValidSalt(const std::string& salt)
 
 auto UserKey::GetKeyByte(int index) const -> uint8_t
 {
-	return derived[index];
+	return (std::min)(derived[index], MAX_KEY_BYTE);
 }
 
 auto UserKey::ObfuscateParameter(const std::string& name) const -> std::string

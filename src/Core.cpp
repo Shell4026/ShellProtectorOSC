@@ -151,6 +151,7 @@ namespace
 		std::string multiplexedKeyAddr;
 		std::vector<std::string> keyAddrs; // Without multiplexing, one per key byte
 		std::vector<uint8_t> keyBytes;
+		bool legacy = false; // Selects the key byte encoding the avatar's animations expect
 	};
 
 	auto MakeTarget(const std::string& prefix, const UserKey& key, int keyLen) -> Target
@@ -172,6 +173,7 @@ namespace
 	auto MakeLegacyTarget(const std::string& prefix, const std::string& password, int keyLen) -> Target
 	{
 		Target target;
+		target.legacy = true;
 		target.lockAddr = prefix + "encrypt_lock";
 		for (int bit = 0; bit < static_cast<int>(target.switchAddrs.size()); ++bit)
 			target.switchAddrs[bit] = prefix + "encrypt_switch" + std::to_string(bit);
@@ -189,7 +191,16 @@ namespace
 		return target;
 	}
 
+	// Avatars map the key parameter p in [-1, 1] to the key byte (p + 1) * 127 (AnimatorManager.CreateKeyCurve on the Unity side).
+	// Remote players receive synced floats as multiples of 1/127, so b = p * 127 + 127 arrives exactly.
+	// UserKey never produces 255, which this can't encode.
 	auto EncodeKeyByte(uint8_t value) -> float
+	{
+		return (value - 127) / 127.0f;
+	}
+
+	// 2.7.0 and earlier map p to (p + 1) * 128, which isn't on the 1/127 grid: remote players decode 64 and 192 wrong.
+	auto EncodeLegacyKeyByte(uint8_t value) -> float
 	{
 		const float factor = 10000.0f;
 		float pwd = 1 - value / 128.0f;
@@ -267,7 +278,8 @@ void Core::StartOSCThread()
 					for (const auto& target : targets)
 					{
 						osc.AddLog(std::to_string(i) + ":" + std::to_string(target.keyBytes[i]));
-						osc.SendOSC(multiplexing ? target.multiplexedKeyAddr : target.keyAddrs[i], EncodeKeyByte(target.keyBytes[i]));
+						osc.SendOSC(multiplexing ? target.multiplexedKeyAddr : target.keyAddrs[i],
+							target.legacy ? EncodeLegacyKeyByte(target.keyBytes[i]) : EncodeKeyByte(target.keyBytes[i]));
 					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(rate));
 					/////////////////////////////////////////////////
