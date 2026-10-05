@@ -42,6 +42,7 @@ public:
 	bool bSave = true;
 	bool bStartAndHide = false;
 	bool bHideWindow = false;
+	bool bAutoStart = false;
 private:
 	std::atomic_bool bStop = false;
 	std::atomic_bool bStart = false;

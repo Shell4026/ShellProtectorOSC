@@ -22,7 +22,7 @@ private:
 	~Renderer();
 public:
 	static constexpr int WINDOW_WIDTH = 300;
-	static constexpr int WINDOW_HEIGHT = 270;
+	static constexpr int WINDOW_HEIGHT = 295;
 private:
 	static inline Renderer* instance = nullptr;
 

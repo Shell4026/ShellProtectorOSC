@@ -3,6 +3,7 @@
 #include "Settings.h"
 #include "SHA256.h"
 #include "Path.h"
+#include "AutoStart.h"
 
 #include <iostream>
 #include <cmath>
@@ -24,6 +25,8 @@ static auto LoadTrayIcon() -> Tray::Icon
 Core::Core() :
 	tray("Shell Protector OSC", LoadTrayIcon())
 {
+	bAutoStart = AutoStart::IsEnabled();
+
 	Settings settings;
 	if (!settings.Load())
 		osc.AddLog("Can't load save file");

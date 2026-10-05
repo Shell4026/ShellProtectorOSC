@@ -1,6 +1,7 @@
 #include "UI.h"
 #include "Renderer.h"
 #include "Core.h"
+#include "AutoStart.h"
 
 #include "imgui.h"
 #include "imgui-SFML.h"
@@ -84,6 +85,17 @@ void UI::Render()
 	ImGui::Text("Start & Hide window on start");
 	ImGui::SameLine();
 	ImGui::Checkbox("##bStartAndHide", &core.bStartAndHide);
+
+	ImGui::Text("Run on Windows startup");
+	ImGui::SameLine();
+	if (ImGui::Checkbox("##bAutoStart", &core.bAutoStart))
+	{
+		if (!AutoStart::SetEnabled(core.bAutoStart))
+		{
+			osc.AddLog("Failed to change the startup registry entry");
+			core.bAutoStart = !core.bAutoStart;
+		}
+	}
 
 	ImGui::SetNextItemWidth(100);
 	if (!core.IsStarting())
