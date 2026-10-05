@@ -97,6 +97,12 @@ void UI::Render()
 		}
 	}
 
+	if (core.IsStarting())
+	{
+		ImGui::Text("Protected avatars found: %d", core.GetProtectedAvatarCount());
+		DisplayTooltip("Avatars encrypted with a per-avatar salt. They are read from the OSC configs VRChat writes and from the list ShellProtector writes on every build, so an avatar can be tested in Gesture Manager before its first upload.");
+	}
+
 	ImGui::SetNextItemWidth(100);
 	if (!core.IsStarting())
 	{

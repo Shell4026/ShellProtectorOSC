@@ -27,6 +27,8 @@ public:
 	bool IsStarting() const;
 	bool IsFinish() const;
 	bool IsHideWindow() const;
+	// Avatars whose salt was found in the VRChat OSC configs
+	int GetProtectedAvatarCount() const;
 private:
 	void StartOSCThread();
 	void InitTray();
@@ -46,6 +48,7 @@ public:
 private:
 	std::atomic_bool bStop = false;
 	std::atomic_bool bStart = false;
+	std::atomic_int protectedAvatarCount = 0;
 
 	std::mutex settingsMutex;
 

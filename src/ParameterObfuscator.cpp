@@ -5,8 +5,8 @@
 #include <memory>
 #include <algorithm>
 
-ParameterObfuscator::ParameterObfuscator(std::string password) :
-	password(std::move(password))
+ParameterObfuscator::ParameterObfuscator(std::string key) :
+	key(std::move(key))
 {
 }
 
@@ -14,7 +14,7 @@ auto ParameterObfuscator::Obfuscate(const std::string& name) const -> std::strin
 {
 	static constexpr char HEX[] = "0123456789abcdef";
 
-	const auto mac = HmacSha256(password, name);
+	const auto mac = HmacSha256(key, name);
 	std::string result;
 	result.reserve(NAME_LENGTH);
 	for (std::size_t i = 0; result.size() < NAME_LENGTH; ++i)

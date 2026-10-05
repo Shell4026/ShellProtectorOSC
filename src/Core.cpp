@@ -2,7 +2,8 @@
 #include "Core.h"
 #include "Settings.h"
 #include "SHA256.h"
-#include "ParameterObfuscator.h"
+#include "UserKey.h"
+#include "AvatarConfigScanner.h"
 #include "Path.h"
 #include "AutoStart.h"
 
@@ -12,6 +13,9 @@
 #include <thread>
 #include <memory>
 #include <array>
+#include <map>
+#include <vector>
+#include <chrono>
 
 static auto LoadTrayIcon() -> Tray::Icon
 {
@@ -132,22 +136,77 @@ bool Core::IsHideWindow() const
 {
 	return bHideWindow;
 }
+int Core::GetProtectedAvatarCount() const
+{
+	return protectedAvatarCount.load(std::memory_order_acquire);
+}
+
+namespace
+{
+	// The parameters one avatar listens to, and the key bytes to send to them
+	struct Target
+	{
+		std::string lockAddr;
+		std::array<std::string, 4> switchAddrs;
+		std::string multiplexedKeyAddr;
+		std::vector<std::string> keyAddrs; // Without multiplexing, one per key byte
+		std::vector<uint8_t> keyBytes;
+	};
+
+	auto MakeTarget(const std::string& prefix, const UserKey& key, int keyLen) -> Target
+	{
+		Target target;
+		target.lockAddr = prefix + key.ObfuscateParameter("encrypt_lock");
+		for (int bit = 0; bit < static_cast<int>(target.switchAddrs.size()); ++bit)
+			target.switchAddrs[bit] = prefix + key.ObfuscateParameter("encrypt_switch" + std::to_string(bit));
+		target.multiplexedKeyAddr = prefix + key.ObfuscateParameter("pkey");
+		for (int i = 0; i < keyLen; ++i)
+		{
+			target.keyAddrs.push_back(prefix + key.ObfuscateParameter("saved_key" + std::to_string(i)));
+			target.keyBytes.push_back(key.GetKeyByte(i));
+		}
+		return target;
+	}
+
+	// Avatars encrypted with ShellProtector 2.7.0 or earlier: plain names and key = password ^ SHA256(password)
+	auto MakeLegacyTarget(const std::string& prefix, const std::string& password, int keyLen) -> Target
+	{
+		Target target;
+		target.lockAddr = prefix + "encrypt_lock";
+		for (int bit = 0; bit < static_cast<int>(target.switchAddrs.size()); ++bit)
+			target.switchAddrs[bit] = prefix + "encrypt_switch" + std::to_string(bit);
+		target.multiplexedKeyAddr = prefix + "pkey";
+
+		SHA256 sha;
+		sha.update(password);
+		std::unique_ptr<uint8_t[]> digest(sha.digest());
+		for (int i = 0; i < keyLen; ++i)
+		{
+			char c = static_cast<std::size_t>(i) < password.size() ? password[i] : 0; // Characters after the terminator count as 0
+			target.keyAddrs.push_back(prefix + "pkey" + std::to_string(i));
+			target.keyBytes.push_back(static_cast<uint8_t>(c ^ digest[i]));
+		}
+		return target;
+	}
+
+	auto EncodeKeyByte(uint8_t value) -> float
+	{
+		const float factor = 10000.0f;
+		float pwd = 1 - value / 128.0f;
+		return -(roundf(pwd * factor) / factor); //Rounding to 4 digits
+	}
+}
 
 void Core::StartOSCThread()
 {
 	oscThread = std::thread([&]
 	{
-		const float factor = pow(10.0f, 4);
 		const std::string paramPrefix = "/avatar/parameters/";
-		std::string oscAddr = "";
-		std::string lockAddr = "";
-		std::array<std::string, 4> switchAddrs;
-
-		// Sends bit `bit` of n to encrypt_switch<bit>
-		auto sendSwitch = [&](int bit, int n)
-			{
-				osc.SendOSC(switchAddrs[bit], ((n >> bit) & 1) == 1);
-			};
+		AvatarConfigScanner scanner;
+		// Derived keys by salt. PBKDF2 is slow on purpose, so keep them until the password changes.
+		std::map<std::string, UserKey> userKeys;
+		std::string derivedKey;
+		int derivedKeyLen = -1;
 
 		while (!bStop.load(std::memory_order_acquire))
 		{
@@ -166,50 +225,57 @@ void Core::StartOSCThread()
 					multiplexing = bParameterMultiplexing;
 				}
 
-				ParameterObfuscator obfuscator(key);
-				lockAddr = paramPrefix + obfuscator.Obfuscate("encrypt_lock");
-				for (int bit = 0; bit < static_cast<int>(switchAddrs.size()); ++bit)
-					switchAddrs[bit] = paramPrefix + obfuscator.Obfuscate("encrypt_switch" + std::to_string(bit));
+				if (key != derivedKey || keyLen != derivedKeyLen)
+				{
+					userKeys.clear();
+					derivedKey = key;
+					derivedKeyLen = keyLen;
+				}
+
+				std::vector<Target> targets;
+				for (const auto& salt : scanner.Scan())
+				{
+					auto it = userKeys.find(salt);
+					if (it == userKeys.end())
+					{
+						const auto start = std::chrono::steady_clock::now();
+						it = userKeys.emplace(salt, UserKey::Derive(key, keyLen, salt)).first;
+						const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+						osc.AddLog("Derived the key for avatar salt " + salt.substr(0, 8) + "... (" + std::to_string(ms) + "ms)");
+					}
+					targets.push_back(MakeTarget(paramPrefix, it->second, keyLen));
+				}
+				protectedAvatarCount.store(static_cast<int>(targets.size()), std::memory_order_release);
+				targets.push_back(MakeLegacyTarget(paramPrefix, key, keyLen));
 
 				osc.SetOSCPort(oscPort);
-				SHA256 sha;
-				sha.update(key);
-				std::unique_ptr<uint8_t[]> digest(sha.digest());
 
 				for (int i = 0; i < keyLen; ++i)
 				{
 					if (multiplexing)
 					{
-						osc.SendOSC(lockAddr, true);
-						switch (keyLen)
+						for (const auto& target : targets)
 						{
-						default: //fall down
-							sendSwitch(3, i);
-						case 8:
-							sendSwitch(2, i);
-						case 4:
-							sendSwitch(1, i);
-							sendSwitch(0, i);
-							break;
+							osc.SendOSC(target.lockAddr, true);
+							// Switch bit b selects key byte i; 4/8/16 byte keys use 2/3/4 switches
+							const int switchCount = keyLen <= 4 ? 2 : (keyLen <= 8 ? 3 : 4);
+							for (int bit = switchCount - 1; bit >= 0; --bit)
+								osc.SendOSC(target.switchAddrs[bit], ((i >> bit) & 1) == 1);
 						}
 					}
 					///////////////////Send password////////////////
-					char c = static_cast<std::size_t>(i) < key.size() ? key[i] : 0; // Characters after the terminator count as 0
-					float pwd;
-					unsigned char var = c ^ digest[i];
-					osc.AddLog(std::to_string(i) + ":" + std::to_string(var));
-					pwd = 1 - var / 128.0f;
-					pwd = -(roundf(pwd * factor) / factor); //Rounding to 4 digits
-
-					if (multiplexing)
-						oscAddr = paramPrefix + obfuscator.Obfuscate("pkey");
-					else
-						oscAddr = paramPrefix + "pkey" + std::to_string(i);
-					osc.SendOSC(oscAddr, pwd);
+					for (const auto& target : targets)
+					{
+						osc.AddLog(std::to_string(i) + ":" + std::to_string(target.keyBytes[i]));
+						osc.SendOSC(multiplexing ? target.multiplexedKeyAddr : target.keyAddrs[i], EncodeKeyByte(target.keyBytes[i]));
+					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(rate));
 					/////////////////////////////////////////////////
 					if (multiplexing)
-						osc.SendOSC(lockAddr, false);
+					{
+						for (const auto& target : targets)
+							osc.SendOSC(target.lockAddr, false);
+					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				}
 				std::this_thread::sleep_for(std::chrono::seconds(1));
