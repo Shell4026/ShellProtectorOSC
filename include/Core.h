@@ -30,13 +30,14 @@ public:
 	bool IsHideWindow() const;
 	// Avatars whose salt was found in the VRChat OSC configs
 	int GetProtectedAvatarCount() const;
+
+	// Every key byte comes from the password (ShellProtector.KeySize on the Unity side)
+	static constexpr int KEY_LENGTH = 16;
 private:
 	void StartOSCThread();
 	void InitTray();
 public:
-	int keyIdx = 0;
-	int keyLength = 4;
-	char password[100] = "";
+	char password[KEY_LENGTH + 1] = "";
 	int refreshRate = 150;
 	int port = 9000;
 	char ip[64] = "127.0.0.1";

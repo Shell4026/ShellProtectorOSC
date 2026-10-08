@@ -47,19 +47,11 @@ void UI::Render()
 	ImGui::PopStyleColor();
 	ImGui::Separator();
 
-	const static char* items[] = { "4", "8", "12", "16" };
-
 	ImGui::Text("Password");
 	ImGui::SameLine();
 
 	ImGui::SetNextItemWidth(150);
-	ImGui::InputText("##Password", core.password, core.keyLength + 1, ImGuiInputTextFlags_Password);
-
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(50);
-	ImGui::Combo(" ", &core.keyIdx, items, 4);
-
-	core.keyLength = 4 * core.keyIdx + 4;
+	ImGui::InputText("##Password", core.password, sizeof(core.password), ImGuiInputTextFlags_Password);
 
 	ImGui::Spacing();
 	ImGui::SetNextItemWidth(50);

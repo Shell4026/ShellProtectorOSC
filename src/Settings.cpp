@@ -24,10 +24,7 @@ bool Settings::Load()
 		password.pop_back(); //remove \n
 	}
 	if (!feof(f))
-	{
-		fgets(str, sizeof(str), f);
-		keyIdx = std::stoi(str);
-	}
+		fgets(str, sizeof(str), f); // The key length index of 1.7 and earlier, now always 16
 	if (!feof(f)) {
 		fgets(str, sizeof(str), f);
 		port = std::stoi(str);
@@ -63,7 +60,7 @@ void Settings::Save() const
 		return;
 
 	fprintf(f, "%s", password.c_str());
-	fprintf(f, "\n%d", keyIdx);
+	fprintf(f, "\n%d", 3); // Keeps the line layout; 3 is the index of 16 in the key length list of 1.7 and earlier
 	fprintf(f, "\n%d", port);
 	fprintf(f, "\n%d", bParameterMultiplexing);
 	fprintf(f, "\n%d", refreshRate);

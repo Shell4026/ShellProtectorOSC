@@ -38,11 +38,7 @@ Core::Core() :
 		osc.AddLog("Can't load save file");
 	else
 	{
-		for (int i = 0; i < settings.password.size(); ++i)
-		{
-			password[i] = settings.password[i];
-		}
-		keyIdx = settings.keyIdx;
+		strncpy_s(password, settings.password.c_str(), _TRUNCATE);
 		port = settings.port;
 		bParameterMultiplexing = settings.bParameterMultiplexing;
 		refreshRate = settings.refreshRate;
@@ -62,7 +58,6 @@ Core::~Core()
 	{
 		Settings settings;
 		settings.password = password;
-		settings.keyIdx = keyIdx;
 		settings.port = port;
 		settings.bParameterMultiplexing = bParameterMultiplexing;
 		settings.refreshRate = refreshRate;
@@ -157,6 +152,8 @@ namespace
 		std::string multiplexedKeyAddr;
 		std::vector<std::string> keyAddrs; // One per key byte
 		std::vector<uint8_t> keyBytes;
+		// The multiplexed send of key byte i carries byte i % cycleLength (see LegacyCycleLength)
+		int cycleLength = Core::KEY_LENGTH;
 		bool multiplexed = false; // Cycle the key bytes through lockAddr, switchAddrs and multiplexedKeyAddr
 		bool direct = false; // Send each key byte to its own keyAddrs entry
 		bool legacy = false; // Selects the key byte encoding the avatar's animations expect
@@ -167,7 +164,7 @@ namespace
 	// - 2 or 4: this app writes each byte to the saved parameter saved_key*, and the avatar syncs them itself
 	//   with parameters of other names.
 	// The names of the two never overlap and VRChat ignores parameters an avatar doesn't have, so both are sent.
-	auto MakeTarget(const std::string& prefix, const UserKey& key, int keyLen) -> Target
+	auto MakeTarget(const std::string& prefix, const UserKey& key) -> Target
 	{
 		Target target;
 		target.multiplexed = true;
@@ -176,7 +173,7 @@ namespace
 		for (int bit = 0; bit < static_cast<int>(target.switchAddrs.size()); ++bit)
 			target.switchAddrs[bit] = prefix + key.ObfuscateParameter("encrypt_switch" + std::to_string(bit));
 		target.multiplexedKeyAddr = prefix + key.ObfuscateParameter("pkey");
-		for (int i = 0; i < keyLen; ++i)
+		for (int i = 0; i < Core::KEY_LENGTH; ++i)
 		{
 			target.keyAddrs.push_back(prefix + key.ObfuscateParameter("saved_key" + std::to_string(i)));
 			target.keyBytes.push_back(key.GetKeyByte(i));
@@ -187,10 +184,11 @@ namespace
 	// Avatars encrypted with ShellProtector 2.7.0 or earlier: plain names and key = password ^ SHA256(password).
 	// Without multiplexing they have one synced pkey* per key byte, and those names can't be told apart from the
 	// multiplexed ones, so the user picks the protocol.
-	auto MakeLegacyTarget(const std::string& prefix, const std::string& password, int keyLen, bool multiplexing) -> Target
+	auto MakeLegacyTarget(const std::string& prefix, const std::string& password, bool multiplexing, int cycleLength) -> Target
 	{
 		Target target;
 		target.legacy = true;
+		target.cycleLength = cycleLength;
 		target.multiplexed = multiplexing;
 		target.direct = !multiplexing;
 		target.lockAddr = prefix + "encrypt_lock";
@@ -201,13 +199,23 @@ namespace
 		SHA256 sha;
 		sha.update(password);
 		std::unique_ptr<uint8_t[]> digest(sha.digest());
-		for (int i = 0; i < keyLen; ++i)
+		for (int i = 0; i < Core::KEY_LENGTH; ++i)
 		{
 			char c = static_cast<std::size_t>(i) < password.size() ? password[i] : 0; // Characters after the terminator count as 0
 			target.keyAddrs.push_back(prefix + "pkey" + std::to_string(i));
 			target.keyBytes.push_back(static_cast<uint8_t>(c ^ digest[i]));
 		}
 		return target;
+	}
+
+	// 2.7.0 and earlier let the user pick the key length n and gave the avatar ceil(log2(n)) switches. A key of 4 or 8
+	// bytes has only 2 or 3, so the avatar sees just the low bits of i and would store byte i in slot i % 4 or i % 8.
+	// Sending byte i % 2^switches instead keeps every slot right. 12 byte keys have 4 switches and ignore slots 12 to 15.
+	auto LegacyCycleLength(int switchCount) -> int
+	{
+		if (switchCount <= 0 || switchCount >= 4)
+			return Core::KEY_LENGTH;
+		return 1 << switchCount;
 	}
 
 	// Avatars map the key parameter p in [-1, 1] to the key byte (p + 1) * 127 (AnimatorManager.CreateKeyCurve on the Unity side).
@@ -236,7 +244,7 @@ void Core::StartOSCThread()
 		// Derived keys by salt. PBKDF2 is slow on purpose, so keep them until the password changes.
 		std::map<std::string, UserKey> userKeys;
 		std::string derivedKey;
-		int derivedKeyLen = -1;
+		int loggedLegacyCycleLength = Core::KEY_LENGTH;
 
 		while (!bStop.load(std::memory_order_acquire))
 		{
@@ -244,66 +252,70 @@ void Core::StartOSCThread()
 			{
 				// Snapshot the settings so the UI thread can edit them while sending
 				std::string key, oscAddr;
-				int keyLen, rate, oscPort;
+				int rate, oscPort;
 				bool multiplexing;
 				{
 					std::lock_guard<std::mutex> lock(settingsMutex);
 					key = password; // Up to the null terminator
-					keyLen = keyLength;
 					rate = refreshRate;
 					oscPort = port;
 					oscAddr = ip;
 					multiplexing = bParameterMultiplexing;
 				}
 
-				if (key != derivedKey || keyLen != derivedKeyLen)
+				if (key != derivedKey)
 				{
 					userKeys.clear();
 					derivedKey = key;
-					derivedKeyLen = keyLen;
 				}
 
+				const AvatarConfigScanner::Result scan = scanner.Scan();
 				std::vector<Target> targets;
-				for (const auto& salt : scanner.Scan())
+				for (const auto& salt : scan.salts)
 				{
 					auto it = userKeys.find(salt);
 					if (it == userKeys.end())
 					{
 						const auto start = std::chrono::steady_clock::now();
-						it = userKeys.emplace(salt, UserKey::Derive(key, keyLen, salt)).first;
+						it = userKeys.emplace(salt, UserKey::Derive(key, KEY_LENGTH, salt)).first;
 						const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 						osc.AddLog("Derived the key for avatar salt " + salt.substr(0, 8) + "... (" + std::to_string(ms) + "ms)");
 					}
-					targets.push_back(MakeTarget(paramPrefix, it->second, keyLen));
+					targets.push_back(MakeTarget(paramPrefix, it->second));
 				}
 				protectedAvatarCount.store(static_cast<int>(targets.size()), std::memory_order_release);
-				targets.push_back(MakeLegacyTarget(paramPrefix, key, keyLen, multiplexing));
+				const int legacyCycleLength = LegacyCycleLength(scan.legacySwitchCount);
+				if (legacyCycleLength != loggedLegacyCycleLength)
+				{
+					osc.AddLog("Key length of avatars encrypted with ShellProtector 2.7.0 or earlier: " + std::to_string(legacyCycleLength));
+					loggedLegacyCycleLength = legacyCycleLength;
+				}
+				targets.push_back(MakeLegacyTarget(paramPrefix, key, multiplexing, legacyCycleLength));
 
 				osc.SetOSCAddress(oscAddr);
 				osc.SetOSCPort(oscPort);
 
-				for (int i = 0; i < keyLen; ++i)
+				for (int i = 0; i < KEY_LENGTH; ++i)
 				{
 					for (const auto& target : targets)
 					{
 						if (target.multiplexed)
 						{
 							osc.SendOSC(target.lockAddr, true);
-							// Switch bit b selects key byte i; 4/8/16 byte keys use 2/3/4 switches
-							const int switchCount = keyLen <= 4 ? 2 : (keyLen <= 8 ? 3 : 4);
-							for (int bit = switchCount - 1; bit >= 0; --bit)
+							// Switch bit b selects key byte i; a 16 byte key uses 4 switches
+							for (int bit = static_cast<int>(target.switchAddrs.size()) - 1; bit >= 0; --bit)
 								osc.SendOSC(target.switchAddrs[bit], ((i >> bit) & 1) == 1);
 						}
 					}
 					///////////////////Send password////////////////
 					for (const auto& target : targets)
 					{
+						auto encode = [&](uint8_t b) { return target.legacy ? EncodeLegacyKeyByte(b) : EncodeKeyByte(b); };
 						osc.AddLog(std::to_string(i) + ":" + std::to_string(target.keyBytes[i]));
-						const float value = target.legacy ? EncodeLegacyKeyByte(target.keyBytes[i]) : EncodeKeyByte(target.keyBytes[i]);
 						if (target.multiplexed)
-							osc.SendOSC(target.multiplexedKeyAddr, value);
+							osc.SendOSC(target.multiplexedKeyAddr, encode(target.keyBytes[i % target.cycleLength]));
 						if (target.direct)
-							osc.SendOSC(target.keyAddrs[i], value);
+							osc.SendOSC(target.keyAddrs[i], encode(target.keyBytes[i]));
 					}
 					std::this_thread::sleep_for(std::chrono::milliseconds(rate));
 					/////////////////////////////////////////////////
