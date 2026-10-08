@@ -24,6 +24,7 @@ public:
 
 	bool IsStartAndHide() const;
 	bool IsShowLog() const;
+	bool IsShowAdvanced() const;
 	bool IsStarting() const;
 	bool IsFinish() const;
 	bool IsHideWindow() const;
@@ -38,8 +39,10 @@ public:
 	char password[100] = "";
 	int refreshRate = 150;
 	int port = 9000;
+	char ip[64] = "127.0.0.1";
 
 	bool bShowLog = false;
+	bool bShowAdvanced = false;
 	bool bParameterMultiplexing = true;
 	bool bSave = true;
 	bool bStartAndHide = false;

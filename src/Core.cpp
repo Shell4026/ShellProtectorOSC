@@ -47,6 +47,7 @@ Core::Core() :
 		bParameterMultiplexing = settings.bParameterMultiplexing;
 		refreshRate = settings.refreshRate;
 		bStartAndHide = settings.bStartAndHide;
+		strncpy_s(ip, settings.ip.c_str(), _TRUNCATE);
 		if (bStartAndHide)
 			bHideWindow = true;
 	}
@@ -66,6 +67,7 @@ Core::~Core()
 		settings.bParameterMultiplexing = bParameterMultiplexing;
 		settings.refreshRate = refreshRate;
 		settings.bStartAndHide = bStartAndHide;
+		settings.ip = ip;
 		settings.Save();
 	}
 
@@ -78,7 +80,7 @@ Core::~Core()
 void Core::Init()
 {
 	std::cout << "Start...\n";
-	osc.Init("127.0.0.1", port);
+	osc.Init(ip, port);
 	std::cout << "OSC Init\n";
 
 	StartOSCThread();
@@ -123,6 +125,10 @@ bool Core::IsStartAndHide() const
 bool Core::IsShowLog() const
 {
 	return bShowLog;
+}
+bool Core::IsShowAdvanced() const
+{
+	return bShowAdvanced;
 }
 bool Core::IsStarting() const
 {
@@ -237,7 +243,7 @@ void Core::StartOSCThread()
 			if (bStart.load(std::memory_order_acquire))
 			{
 				// Snapshot the settings so the UI thread can edit them while sending
-				std::string key;
+				std::string key, oscAddr;
 				int keyLen, rate, oscPort;
 				bool multiplexing;
 				{
@@ -246,6 +252,7 @@ void Core::StartOSCThread()
 					keyLen = keyLength;
 					rate = refreshRate;
 					oscPort = port;
+					oscAddr = ip;
 					multiplexing = bParameterMultiplexing;
 				}
 
@@ -272,6 +279,7 @@ void Core::StartOSCThread()
 				protectedAvatarCount.store(static_cast<int>(targets.size()), std::memory_order_release);
 				targets.push_back(MakeLegacyTarget(paramPrefix, key, keyLen, multiplexing));
 
+				osc.SetOSCAddress(oscAddr);
 				osc.SetOSCPort(oscPort);
 
 				for (int i = 0; i < keyLen; ++i)

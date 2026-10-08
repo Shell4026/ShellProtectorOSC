@@ -71,12 +71,6 @@ void UI::Render()
 	ImGui::SameLine();
 	ImGui::Checkbox("##bParameterMultiplexing", &core.bParameterMultiplexing);
 
-	ImGui::Text("Refresh rate(ms)");
-	DisplayTooltip("The wait time before sending the next OSC data. If you can't decrypt when viewed by other users, try increasing this value.");
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(50);
-	ImGui::InputInt("##Refresh rate", &core.refreshRate, 0, 0);
-
 	ImGui::Text("Save Option");
 	ImGui::SameLine();
 	ImGui::Checkbox("##save", &core.bSave);
@@ -122,6 +116,48 @@ void UI::Render()
 	ImGui::SetCursorPosY(Renderer::WINDOW_HEIGHT - 30);
 	if (ImGui::Button("Logs"))
 		core.bShowLog = true;
+	ImGui::SameLine();
+	if (ImGui::Button("Advanced"))
+		core.bShowAdvanced = true;
+	ImGui::End();
+}
+
+void UI::RenderAdvanced()
+{
+	static ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoDecoration |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoSavedSettings;
+
+	auto settingsLock = core.LockSettings();
+
+	ImGui::SetNextWindowSize(ImVec2(Renderer::WINDOW_WIDTH, Renderer::WINDOW_HEIGHT));
+	ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
+
+	ImGui::Begin("Advanced", 0, flags);
+	if (ImGui::Button("Back"))
+	{
+		ImGui::End();
+		core.bShowAdvanced = false;
+		return;
+	}
+	ImGui::Separator();
+
+	ImGui::Text("OSC IP");
+	DisplayTooltip("The address to send OSC data to. Change it only if VRChat runs on another device, such as a standalone Quest on the same network.");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(130);
+	ImGui::InputText("##OSC IP", core.ip, sizeof(core.ip), ImGuiInputTextFlags_CharsNoBlank);
+	ImGui::SameLine();
+	if (ImGui::Button("Reset"))
+		strcpy_s(core.ip, "127.0.0.1");
+
+	ImGui::Text("Refresh rate(ms)");
+	DisplayTooltip("The wait time before sending the next OSC data. If you can't decrypt when viewed by other users, try increasing this value.");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(50);
+	ImGui::InputInt("##Refresh rate", &core.refreshRate, 0, 0);
+
 	ImGui::End();
 }
 

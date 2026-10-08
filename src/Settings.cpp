@@ -44,6 +44,13 @@ bool Settings::Load()
 		fgets(str, sizeof(str), f);
 		bStartAndHide = std::stoi(str);
 	}
+	if (!feof(f) && fgets(str, sizeof(str), f)) {
+		ip = str;
+		while (!ip.empty() && (ip.back() == '\n' || ip.back() == '\r'))
+			ip.pop_back();
+		if (ip.empty())
+			ip = "127.0.0.1";
+	}
 	fclose(f);
 	return true;
 }
@@ -61,5 +68,6 @@ void Settings::Save() const
 	fprintf(f, "\n%d", bParameterMultiplexing);
 	fprintf(f, "\n%d", refreshRate);
 	fprintf(f, "\n%d", bStartAndHide);
+	fprintf(f, "\n%s", ip.c_str());
 	fclose(f);
 }

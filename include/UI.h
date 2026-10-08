@@ -11,6 +11,7 @@ public:
 	void DisplayTooltip(const char* desc);
 	void Render();
 	void RenderLog();
+	void RenderAdvanced();
 private:
 	Core& core;
 	OSC& osc;

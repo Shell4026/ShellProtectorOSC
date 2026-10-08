@@ -72,6 +72,7 @@ auto OSC::GetOSCData(const std::string& oscAddr, int v) -> std::vector<unsigned 
 void OSC::Init(const std::string& address, unsigned int port)
 {
 	this->addr = address;
+	this->ipAddr = sf::IpAddress(this->addr);
 	this->port = port;
 
 	if (socket.bind(sf::Socket::AnyPort) != sf::Socket::Done)
@@ -84,6 +85,7 @@ void OSC::Init(const std::string& address, unsigned int port)
 void OSC::Init(std::string&& address, unsigned int port)
 {
 	this->addr = std::move(address);
+	this->ipAddr = sf::IpAddress(this->addr);
 	this->port = port;
 	if (socket.bind(sf::Socket::AnyPort) != sf::Socket::Done)
 	{
@@ -97,11 +99,24 @@ void OSC::SetOSCPort(int port)
 	this->port = port;
 }
 
+void OSC::SetOSCAddress(const std::string& address)
+{
+	if (address == addr)
+		return;
+	// Resolve once here instead of on every send, since a host name would need a DNS lookup
+	addr = address;
+	ipAddr = sf::IpAddress(addr);
+	if (ipAddr == sf::IpAddress::None)
+		AddLog("Invalid OSC address: " + addr);
+	else
+		AddLog("OSC address: " + ipAddr.toString());
+}
+
 
 bool OSC::SendOSC(std::string oscAddr, float v)
 {
 	auto data = GetOSCData(oscAddr, v);
-	if (socket.send(&data[0], data.size(), addr, port) != sf::Socket::Done)
+	if (socket.send(&data[0], data.size(), ipAddr, port) != sf::Socket::Done)
 	{
 		AddLog("Socket send failed.");
 		return false;
@@ -113,7 +128,7 @@ bool OSC::SendOSC(std::string oscAddr, float v)
 bool OSC::SendOSC(std::string oscAddr, bool v)
 {
 	auto data = GetOSCData(oscAddr, v);
-	if (socket.send(&data[0], data.size(), addr, port) != sf::Socket::Done)
+	if (socket.send(&data[0], data.size(), ipAddr, port) != sf::Socket::Done)
 	{
 		AddLog("Socket send failed.");
 		return false;
@@ -125,7 +140,7 @@ bool OSC::SendOSC(std::string oscAddr, bool v)
 bool OSC::SendOSC(std::string oscAddr, int v)
 {
 	auto data = GetOSCData(oscAddr, v);
-	if (socket.send(&data[0], data.size(), addr, port) != sf::Socket::Done)
+	if (socket.send(&data[0], data.size(), ipAddr, port) != sf::Socket::Done)
 	{
 		AddLog("Socket send failed.");
 		return false;

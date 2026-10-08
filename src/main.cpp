@@ -33,10 +33,12 @@ int MAIN
 	while (renderer->GetWindow()->isOpen())
 	{
 		renderer->Update(deltaClock.restart());
-		if (!core.IsShowLog())
-			ui.Render();
-		else
+		if (core.IsShowLog())
 			ui.RenderLog();
+		else if (core.IsShowAdvanced())
+			ui.RenderAdvanced();
+		else
+			ui.Render();
 		renderer->Render();
 
 		if (core.bHideWindow)

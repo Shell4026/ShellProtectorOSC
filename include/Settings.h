@@ -14,4 +14,5 @@ public:
 	int refreshRate = 150;
 	bool bParameterMultiplexing = true;
 	bool bStartAndHide = false;
+	std::string ip = "127.0.0.1";
 };

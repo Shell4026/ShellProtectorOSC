@@ -19,6 +19,7 @@ public:
 	void Init(std::string&& address, unsigned int port);
 
 	void SetOSCPort(int port);
+	void SetOSCAddress(const std::string& address);
 
 	bool SendOSC(std::string oscAddr, float v);
 	bool SendOSC(std::string oscAddr, bool v);
@@ -34,6 +35,7 @@ private:
 	sf::UdpSocket socket;
 
 	std::string addr;
+	sf::IpAddress ipAddr;
 	std::deque<std::string> logs;
 	mutable std::mutex logMutex;
 	unsigned int port;
